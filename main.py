@@ -3,6 +3,7 @@ import random
 import matplotlib.pyplot as plt 
 import math
 import time
+from sklearn.metrics import mean_squared_error
 
 
 def add(x,y):
@@ -83,7 +84,7 @@ def evaluator(tree, val):
     return(wtree[1])
 
 def read_data():
-  f = open("data2022_Bronze.txt", "r")
+  f = open("Symbolic Regression/data2022_Bronze.txt", "r")
   data = []
   while(True):
       line = f.readline()
@@ -146,12 +147,12 @@ def random_search(iterations):
 def make_child(end=False):
     if end:
         choices = ["x","num"]
-        child = random.choices(choices, [1,1])[0]
+        child = random.choices(choices, [1,2])[0]
         child = random.uniform(-10,10) if child == "num" else child
     else:
         ops = ["+", "-", "*", "/", "sin", "cos"]
         ops_and_vals = ops + ['num'] + ['x']
-        weights = [1,1,1,1,1,1] + [1] + [1]
+        weights = [1,1,1,1,1,1] + [3] + [2]
         op_functions = {"+": add, "-": subtract, "*": multiply, "/": divide, "sin": sin, "cos": cos}
         child = random.choices(ops_and_vals, [i/1000 for i in weights], k=1)[0]
         if child in ops:
@@ -204,6 +205,7 @@ def get_fitness(indiv, dataset):
     y_pred = []
     x_pred = []
     x_indices = []
+    #print(indiv)
     for i in range(len(x_vals)):
         try:
             y_pred.append(evaluator(indiv,x_vals[i]))
@@ -211,48 +213,105 @@ def get_fitness(indiv, dataset):
             x_indices.append(i)
         except ZeroDivisionError:
             continue
+    #print("=====")
+    #print(y_pred)
+    #print(indiv)
     y_vals = [y_vals[i] for i in x_indices]
-    return(mean_squared_error(y_vals, y_pred)/1000)
+    return(float((mean_squared_error(y_vals, y_pred)/1000)))
 
 
 
 
-def GP(n_gen, init_population):
+def GP_trunc(n_gen, init_population, dataset, c_rate, mut_rate):
     #init population [done]
     #choose parent pairs [done]
     #cross all parent pairs [done]
     #mutate cross results (offspring)
     #deterministic crowding competition
     #fitness evaluations
-    mut_rate = 0.1
     initial_population = [fgen(4) for i in range(init_population)]
-    fitnesses = [1 for i in initial_population]
+    
+    fitnesses = [get_fitness(i,dataset) for i in initial_population]
+    sum_f = sum(fitnesses)
+    fitnesses = [i/sum_f for i in fitnesses]
+
     pool = []
     pool_size = 0
     for i in range(n_gen):
-        while pool_size < len(initial_population):
-            couple = np.random.choice(initial_population, size=2, p=fitnesses, replace=False)
-            children = cross_parents(couple, mut_rate)
-            replacements = det_crowding(couple, children)
-            [pool.append(i) for i in replacements]
+        print("Generation: ", i+1)
+        #[print(i, "\n") for i in initial_population]
+        ##print("=======")
+        #[print(type(i), "\n") for i in initial_population]
+        # [print(i, "\n") for i in fitnesses]
+        # print("=======")
+        # [print(type(i), "\n") for i in fitnesses]
+        initial_population = [x for y, x in sorted(zip(fitnesses, initial_population), key=lambda tup: tup[0])]
+        initial_population = initial_population[:int(.5*len(initial_population))] #selection
+        fitnesses = sorted(fitnesses)
+        fitnesses = fitnesses[:int(.5*len(fitnesses))]
+        
+        while pool_size < 2*len(initial_population):
+            #print(len(initial_population),"A")
+            couple = np.random.choice([i for i in range(len(initial_population))], size=2, replace=False)
+            couple = [initial_population[couple[0]], initial_population[couple[1]]]
+            #print("couple", len(couple))
+            
+            if random.choices([True, False], weights=[c_rate,1], k=1)[0]:
+                print(len(couple[0]), len(couple[1]))
+                children = cross_parents(couple)
+                #print(len(initial_population),"C")
+            else:
+                children = couple
+                #print(len(initial_population),"D")
+            [mutator(i, mut_rate) for i in children] #mutate
+            for i in children:
+                if len(i) < 110:
+                    pool.append(i)
+                    pool_size +=1
+                else:
+                    pool.append(fgen(4))
+            #[pool.append(i) for i in children]
+            #pool_size+=2
+            #print("ee")
+            #print(len(initial_population),"B")
+
         initial_population = pool
         fitnesses = [get_fitness(individual, dataset) for individual in initial_population]
-        pool = 0
+        pool = []
         pool_size = 0 
-
-    final_population = [x for y, x in sorted(zip(fitnesses, initial_population))]
+    
+    final_population = [x for y, x in sorted(zip(fitnesses, initial_population), key=lambda tup: tup[0])]
 
     return(final_population)
     
 
 
+def GP_detcrow():
+        #     while pool_size < len(initial_population):
+        #     couple = np.random.choice(initial_population, size=2, p=fitnesses, replace=False)
+        #     children = cross_parents(couple)
+        #     replacements = det_crowding(couple, children)
+        #     [pool.append(i) for i in replacements]
+        # initial_population = pool
+        # fitnesses = [get_fitness(individual, dataset) for individual in initial_population]
+        # pool = 0
+        # pool_size = 0 
+    pass
+
 def mutator(tree, mut_rate):
     mutation = random.choices([True, False], weights=[mut_rate, 1], k=1)[0]
     if not mutation:
         return(tree)
-    
+    valid_ids = []
     for idx, val in enumerate(tree):
-        if 
+        if type(val) == float:
+            valid_ids.append(idx)
+    new_vals = [tree[i] + random.uniform(-1,1) for i in valid_ids]
+
+    for i in range(len(valid_ids)):
+        tree[valid_ids[i]] = new_vals[i]
+
+    return(tree)
 
 
 
@@ -301,15 +360,12 @@ def cross_parents(couple):
         else:
             bad = False
 
-    print("indices: , ", left_idx, right_idx)
     l_idx_depth = math.floor(math.log(left_idx)/math.log(2))
     r_idx_depth = math.floor(math.log(right_idx)/math.log(2))
     delta = right_idx-left_idx
     left_nodes = [left_idx] + get_subnodes(couple[0], left_idx)
     right_nodes = [right_idx] + get_subnodes(couple[1], right_idx)
 
-    left_depth = get_tree_depth(couple[0])
-    right_depth = get_tree_depth(couple[1])
 
     l_nodes_trans = []
     r_nodes_trans = []
@@ -325,8 +381,6 @@ def cross_parents(couple):
     for j in right_nodes:
         new_r_tree[j] = None
         j_depth = math.floor(math.log(j)/math.log(2))
-        #print(left_nodes)
-        #print(j_depth, r_idx_depth)
         r_nodes_trans.append(j - delta* 2 **(j_depth -r_idx_depth))
 
 
@@ -352,7 +406,31 @@ def cross_parents(couple):
     
 
 
+def plot_soln(tree, dataset):
+    x_vals = [tup[0] for tup in dataset]
+    y_vals = [tup[1] for tup in dataset]
+    
 
+    y_pred = []
+    x_pred = []
+    x_indices = []
+    for i in range(len(x_vals)):
+        try:
+            y_pred.append(evaluator(tree,x_vals[i]))
+            x_pred.append(x_vals[i])
+            x_indices.append(i)
+        except ZeroDivisionError:
+            continue
+    fitness = np.mean([(y_vals[x_indices[i]]-y_pred[i])**2 for i in range(len(x_indices))])/len(x_indices)
+
+
+    print(fitness)
+
+
+    plt.plot(x_vals, y_vals)
+    plt.plot(x_pred, y_pred)
+    plt.show()  
+    
 
 
 
@@ -360,16 +438,7 @@ def cross_parents(couple):
 
 if __name__ == "__main__":
     
-
-    #print(tree_editor([0,sin], [2]))
-    #random_search(1000)
-    #print(function_generator())
-    #a = fgen(6)
-    #print(a)
-    #print(tree_solver(a[0]))
-    tree1 = fgen(5)
-    tree2 = fgen(5)
-    print("tree1 valid: ", tree_solver(tree1, 1))
-    print("tree2 valid: ", tree_solver(tree2, 1))
-    print([tree_solver(i) for i in cross_parents([tree1,tree2])])
+    data = read_data()
+    soln = GP_trunc(20, 24, data, 0.8, 0.1)[0]
+    plot_soln(soln, data)
     
