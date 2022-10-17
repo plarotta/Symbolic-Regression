@@ -244,17 +244,22 @@ def GP_trunc(n_gen, init_population, dataset, c_rate, mut_rate):
     initial_population = [fgen(4) for i in range(init_population)]
     
     fitnesses = [get_fitness(i,dataset) for i in initial_population]
-    sum_f = sum(fitnesses)
-    fitnesses = [i/sum_f for i in fitnesses]
+    #sum_f = sum(fitnesses)
+    #fitnesses = [i/sum_f for i in fitnesses]
     best_fits = []
     pool = []
     pool_size = 0
     for i in range(n_gen):
         print("Generation: ", i+1)
         initial_population = [x for y, x in sorted(zip(fitnesses, initial_population), key=lambda tup: tup[0])]
+        initial_population = initial_population[:len(initial_population)-5]
         initial_population = initial_population[:int(.5*len(initial_population))] #selection
+        
         fitnesses = sorted(fitnesses)
+        #print("BAAAA", fitnesses)
+        fitnesses = fitnesses[:len(fitnesses)-5]
         fitnesses = fitnesses[:int(.5*len(fitnesses))]
+        
         
         while pool_size < 2*len(initial_population):
             couple = np.random.choice([i for i in range(len(initial_population))], size=2, replace=False)
@@ -273,10 +278,15 @@ def GP_trunc(n_gen, init_population, dataset, c_rate, mut_rate):
                 else:
                     pool.append(fgen(4))
                     pool_size +=1
-
-
-        initial_population = pool
-        fitnesses = [get_fitness(individual, dataset) for individual in initial_population]
+        fitnesses = fitnesses[:5] + [get_fitness(individual, dataset) for individual in pool]
+        #print(fitnesses)
+        assert True
+        initial_population = initial_population[:5] + pool 
+        
+        # fitnesses = [get_fitness(individual, dataset) for individual in pool]
+        # initial_population = pool 
+        
+        
         pool = []
         pool_size = 0 
         best_fits.append(min(fitnesses))
@@ -440,7 +450,7 @@ def plot_soln(tree, dataset):
 if __name__ == "__main__":
     
     data = read_data()
-    soln, fitnesses = GP_trunc(500, 40, data, 0.75, 0.1)
+    soln, fitnesses = GP_trunc(800, 50, data, 0.75, 0.1)
     soln = soln[0]
     print(soln)
     print(fitnesses)
