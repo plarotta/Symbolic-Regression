@@ -84,7 +84,7 @@ def evaluator(tree, val):
     return(wtree[1])
 
 def read_data():
-  f = open("Symbolic Regression/data2022_Bronze.txt", "r")
+  f = open("data2022_Bronze.txt", "r")
   data = []
   while(True):
       line = f.readline()
@@ -111,7 +111,7 @@ def random_search(iterations):
     best_y = []
     n = 0
     while n < iterations:
-        tree = fgen(4)
+        tree = fgen(2)
         y_pred = []
         x_pred = []
         x_indices = []
@@ -147,14 +147,15 @@ def random_search(iterations):
 def make_child(end=False):
     if end:
         choices = ["x","num"]
-        child = random.choices(choices, [1,2])[0]
+        child = random.choices(choices, [1,1])[0]
         child = random.uniform(-10,10) if child == "num" else child
     else:
         ops = ["+", "-", "*", "/", "sin", "cos"]
         ops_and_vals = ops + ['num'] + ['x']
-        weights = [1,1,1,1,1,1] + [3] + [2]
+        weights = [1,1,1,1,2,2] + [3] + [4]
         op_functions = {"+": add, "-": subtract, "*": multiply, "/": divide, "sin": sin, "cos": cos}
         child = random.choices(ops_and_vals, [i/1000 for i in weights], k=1)[0]
+        #print(child)
         if child in ops:
             child = op_functions[child]
         elif child == "num":
@@ -217,7 +218,7 @@ def get_fitness(indiv, dataset):
     #print(y_pred)
     #print(indiv)
     y_vals = [y_vals[i] for i in x_indices]
-    return(float((mean_squared_error(y_vals, y_pred)/1000)))
+    return(float((mean_squared_error(y_vals, y_pred)/1000)) + 0.005*len(indiv))
 
 
 
@@ -229,7 +230,7 @@ def GP_trunc(n_gen, init_population, dataset, c_rate, mut_rate):
     #mutate cross results (offspring)
     #deterministic crowding competition
     #fitness evaluations
-    initial_population = [fgen(4) for i in range(init_population)]
+    initial_population = [fgen(3) for i in range(init_population)]
     
     fitnesses = [get_fitness(i,dataset) for i in initial_population]
     sum_f = sum(fitnesses)
@@ -265,11 +266,12 @@ def GP_trunc(n_gen, init_population, dataset, c_rate, mut_rate):
                 #print(len(initial_population),"D")
             [mutator(i, mut_rate) for i in children] #mutate
             for i in children:
-                if len(i) < 110:
+                if len(i) < 110 and "x" in i:
                     pool.append(i)
                     pool_size +=1
                 else:
-                    pool.append(fgen(4))
+                    pool.append(fgen(3))
+                    pool_size +=1
             #[pool.append(i) for i in children]
             #pool_size+=2
             #print("ee")
@@ -439,6 +441,22 @@ def plot_soln(tree, dataset):
 if __name__ == "__main__":
     
     data = read_data()
-    soln = GP_trunc(20, 24, data, 0.8, 0.1)[0]
+    soln = GP_trunc(500, 34, data, 0.8, 0.1)[0]
+    print(soln)
     plot_soln(soln, data)
+    #print(fgen(4))
+    # func = fgen(2)
+    # print(func)
+    # plt.plot(range(1,100), [evaluator(func, i) for i in range(1,100)])
+    # func = fgen(2)
+    # print(func)
+    # plt.plot(range(1,100), [evaluator(func, i) for i in range(1,100)])
+    # func = fgen(2)
+    # print(func)
+    # plt.plot(range(1,100), [evaluator(func, i) for i in range(1,100)])
+    # func = fgen(2)
+    # print(func)
+    # plt.plot(range(1,100), [evaluator(func, i) for i in range(1,100)])
+    # plt.show()
+    #random_search(1800)
     
