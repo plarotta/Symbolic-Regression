@@ -3,7 +3,6 @@ import random
 import matplotlib.pyplot as plt 
 import math
 import time
-from sklearn.metrics import mean_squared_error
 
 
 def add(x,y):
@@ -24,6 +23,10 @@ def sin(x):
 def cos(x):
 	return(np.cos(x))
 
+
+def MSE(y1, y2):
+    #for i in range(len(y1)):
+    return(np.mean([(y1[i]-y2[i])**2 for i in range(len(y1))])/len(y1))
 
 def tree_solver(tree, root_idx=1):
 	right_done = None
@@ -152,7 +155,7 @@ def make_child(end=False):
     else:
         ops = ["+", "-", "*", "/", "sin", "cos"]
         ops_and_vals = ops + ['num'] + ['x']
-        weights = [1,1,1,1,2,2] + [3] + [4]
+        weights = [1,1,1,1,1,1] + [2] + [2]
         op_functions = {"+": add, "-": subtract, "*": multiply, "/": divide, "sin": sin, "cos": cos}
         child = random.choices(ops_and_vals, [i/1000 for i in weights], k=1)[0]
         #print(child)
@@ -195,6 +198,13 @@ def fgen(max_depth):
                     break
         if "x" in tree:
             done = True
+        try:
+            #print(evaluator(tree, 10))
+            done = True
+        except ZeroDivisionError:
+            done = False
+        except ValueError:
+            done = False
     end_idx = next(x for x in reversed(range(len(tree))) 
                           if tree[x] is not None)
     tree = tree[:end_idx+1]
@@ -218,7 +228,8 @@ def get_fitness(indiv, dataset):
     #print(y_pred)
     #print(indiv)
     y_vals = [y_vals[i] for i in x_indices]
-    return(float((mean_squared_error(y_vals, y_pred)/1000)) + 0.005*len(indiv))
+    return(MSE(y_vals, y_pred) + 0.003*len(indiv))
+    #return(MSE(y_vals, y_pred))
 
 
 
@@ -230,61 +241,49 @@ def GP_trunc(n_gen, init_population, dataset, c_rate, mut_rate):
     #mutate cross results (offspring)
     #deterministic crowding competition
     #fitness evaluations
-    initial_population = [fgen(3) for i in range(init_population)]
+    initial_population = [fgen(4) for i in range(init_population)]
     
     fitnesses = [get_fitness(i,dataset) for i in initial_population]
     sum_f = sum(fitnesses)
     fitnesses = [i/sum_f for i in fitnesses]
-
+    best_fits = []
     pool = []
     pool_size = 0
     for i in range(n_gen):
         print("Generation: ", i+1)
-        #[print(i, "\n") for i in initial_population]
-        ##print("=======")
-        #[print(type(i), "\n") for i in initial_population]
-        # [print(i, "\n") for i in fitnesses]
-        # print("=======")
-        # [print(type(i), "\n") for i in fitnesses]
         initial_population = [x for y, x in sorted(zip(fitnesses, initial_population), key=lambda tup: tup[0])]
         initial_population = initial_population[:int(.5*len(initial_population))] #selection
         fitnesses = sorted(fitnesses)
         fitnesses = fitnesses[:int(.5*len(fitnesses))]
         
         while pool_size < 2*len(initial_population):
-            #print(len(initial_population),"A")
             couple = np.random.choice([i for i in range(len(initial_population))], size=2, replace=False)
             couple = [initial_population[couple[0]], initial_population[couple[1]]]
-            #print("couple", len(couple))
             
             if random.choices([True, False], weights=[c_rate,1], k=1)[0]:
                 print(len(couple[0]), len(couple[1]))
                 children = cross_parents(couple)
-                #print(len(initial_population),"C")
             else:
                 children = couple
-                #print(len(initial_population),"D")
             [mutator(i, mut_rate) for i in children] #mutate
             for i in children:
                 if len(i) < 110 and "x" in i:
                     pool.append(i)
                     pool_size +=1
                 else:
-                    pool.append(fgen(3))
+                    pool.append(fgen(4))
                     pool_size +=1
-            #[pool.append(i) for i in children]
-            #pool_size+=2
-            #print("ee")
-            #print(len(initial_population),"B")
+
 
         initial_population = pool
         fitnesses = [get_fitness(individual, dataset) for individual in initial_population]
         pool = []
         pool_size = 0 
+        best_fits.append(min(fitnesses))
     
     final_population = [x for y, x in sorted(zip(fitnesses, initial_population), key=lambda tup: tup[0])]
 
-    return(final_population)
+    return(final_population,best_fits)
     
 
 
@@ -441,22 +440,9 @@ def plot_soln(tree, dataset):
 if __name__ == "__main__":
     
     data = read_data()
-    soln = GP_trunc(500, 34, data, 0.8, 0.1)[0]
+    soln, fitnesses = GP_trunc(500, 40, data, 0.75, 0.1)
+    soln = soln[0]
     print(soln)
-    plot_soln(soln, data)
-    #print(fgen(4))
-    # func = fgen(2)
-    # print(func)
-    # plt.plot(range(1,100), [evaluator(func, i) for i in range(1,100)])
-    # func = fgen(2)
-    # print(func)
-    # plt.plot(range(1,100), [evaluator(func, i) for i in range(1,100)])
-    # func = fgen(2)
-    # print(func)
-    # plt.plot(range(1,100), [evaluator(func, i) for i in range(1,100)])
-    # func = fgen(2)
-    # print(func)
-    # plt.plot(range(1,100), [evaluator(func, i) for i in range(1,100)])
-    # plt.show()
-    #random_search(1800)
-    
+    print(fitnesses)
+    print(get_fitness(soln, data))
+    plot_soln(soln,data)
