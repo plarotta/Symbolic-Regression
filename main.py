@@ -3,7 +3,19 @@ import random
 import matplotlib.pyplot as plt 
 import math
 import time
+from sklearn.metrics import mean_squared_error
 
+def read_data():
+  f = open("data2022_Silver.txt", "r")
+  data = []
+  while(True):
+      line = f.readline()
+      if not line:
+          break
+      line = [float(x) for x in line.strip().split(",")]
+      data.append(tuple(line))
+  f.close
+  return(data)
 
 def add(x,y):
 	return(x+y)
@@ -23,10 +35,11 @@ def sin(x):
 def cos(x):
 	return(np.cos(x))
 
-
 def MSE(y1, y2):
-    #for i in range(len(y1)):
-    return(np.mean([(y1[i]-y2[i])**2 for i in range(len(y1))])/len(y1))
+    return(sum([(y1[i]-y2[i])**2 for i in range(len(y1))])/len(y1))
+    #print(y1, y2)
+    #print(max(y1), max(y2))
+    #return(mean_squared_error(y1,y2))
 
 def tree_solver(tree, root_idx=1):
 	right_done = None
@@ -70,9 +83,6 @@ def tree_solver(tree, root_idx=1):
 	else:
 		return(tree_solver(tree, root_idx*2) and tree_solver(tree, root_idx*2+1))
 
-
-
-# tree = [None, sin, divide, None, subtract, 2, None, None, 'x', -10]
 def evaluator(tree, val):
     wtree = tree.copy()
     for idx in reversed(range(1,len(wtree))):
@@ -85,22 +95,6 @@ def evaluator(tree, val):
         else:
             pass
     return(wtree[1])
-
-def read_data():
-  f = open("data2022_Bronze.txt", "r")
-  data = []
-  while(True):
-      line = f.readline()
-      if not line:
-          break
-      line = [float(x) for x in line.strip().split(",")]
-      data.append(tuple(line))
-  f.close
-  return(data)
-
-def get_tree_depth(tree):
-    size = sum([i != None for i in tree])
-    return(math.floor(math.log(size,2))+1)
 
 def random_search(iterations):
     dat = read_data()
@@ -147,18 +141,38 @@ def random_search(iterations):
 
     return(best_func)
 
-def make_child(end=False):
+def make_child(end=False, uni=False, div_r=False):
     if end:
         choices = ["x","num"]
-        child = random.choices(choices, [1,1])[0]
+        child = random.choices(choices, [2,1])[0]
         child = random.uniform(-10,10) if child == "num" else child
+    elif uni:
+        ops = ["+", "-", "*", "/", "sin", "cos"]
+        choices = ["+", "-", "*", "/","x"]
+        op_functions = {"+": add, "-": subtract, "*": multiply, "/": divide, "sin": sin, "cos": cos}
+        child = random.choices(choices, k=1)[0]
+        if child in ops:
+            child = op_functions[child]
+
+    elif div_r:
+        ops = ["+", "-", "*", "/", "sin", "cos"]
+        ops_and_vals = ops + ['num']
+        weights = [1,1,1,1,1,1] + [3]
+        op_functions = {"+": add, "-": subtract, "*": multiply, "/": divide, "sin": sin, "cos": cos}
+        child = random.choices(ops_and_vals, [i for i in weights], k=1)[0]
+        if child in ops:
+            child = op_functions[child]
+        elif child == "num":
+            child = random.uniform(-10,10)
+        else:
+            pass        
+        pass
     else:
         ops = ["+", "-", "*", "/", "sin", "cos"]
         ops_and_vals = ops + ['num'] + ['x']
-        weights = [1,1,1,1,1,1] + [2] + [2]
+        weights = [1,1,1,1,1,1] + [1] + [3]
         op_functions = {"+": add, "-": subtract, "*": multiply, "/": divide, "sin": sin, "cos": cos}
-        child = random.choices(ops_and_vals, [i/1000 for i in weights], k=1)[0]
-        #print(child)
+        child = random.choices(ops_and_vals, [i for i in weights], k=1)[0]
         if child in ops:
             child = op_functions[child]
         elif child == "num":
@@ -175,36 +189,44 @@ def fgen(max_depth):
     n = 0
     while not done:
         n+=1
-        last_gen = 2**(max_depth-1)
-        tree = [None for i in range(2**(max_depth+1))]
-        tree[1] = add
+        chosen_depth = random.choice([i for i in range(2,max_depth)])
+        last_gen = 2**(chosen_depth-1)
+        tree = [None for i in range(2**(chosen_depth+1))]
+        ops = ["+", "-", "*", "/", "sin", "cos"]
+        op_functions = {"+": add, "-": subtract, "*": multiply, "/": divide, "sin": sin, "cos": cos}
+        tree[1] = op_functions[random.choice(ops)]
         for idx in range(1, len(tree)):
             node = tree[idx]
-            try:
-                if callable(node):
-                    if idx >= last_gen:
-                        if node == sin or node == cos:
-                            tree[idx*2] = make_child(True)
-                        else:
-                            tree[idx*2] = make_child(True)
-                            tree[idx*2+1] = make_child(True)
+            if callable(node):
+                if idx >= last_gen:
+                    if node == sin or node == cos:
+                        tree[idx*2] = make_child(end=True, uni=True)
+                    elif node == divide:
+                        tree[idx*2] = make_child(True)
+                        tree[idx*2+1] = make_child(True,div_r=True)
                     else:
-                        if node == sin or node == cos:
-                            tree[idx*2] = make_child()
-                        else:
-                            tree[idx*2] = make_child()
-                            tree[idx*2+1] = make_child()
-            except IndexError:
-                    break
+                        tree[idx*2] = make_child(True)
+                        tree[idx*2+1] = make_child(True)
+                else:
+                    if node == sin or node == cos:
+                        tree[idx*2] = make_child(uni=True)
+                    elif node == divide:
+                        tree[idx*2] = make_child(True)
+                        tree[idx*2+1] = make_child(True,div_r=True)
+                    else:
+                        tree[idx*2] = make_child()
+                        tree[idx*2+1] = make_child()
         if "x" in tree:
-            done = True
-        try:
-            #print(evaluator(tree, 10))
-            done = True
-        except ZeroDivisionError:
-            done = False
-        except ValueError:
-            done = False
+            try:
+                dummy = evaluator(tree, 0)
+                if dummy == np.inf:
+                    done = False
+                else:
+                    done = True
+            except ZeroDivisionError:
+                done = False
+            except ValueError:
+                done = False
     end_idx = next(x for x in reversed(range(len(tree))) 
                           if tree[x] is not None)
     tree = tree[:end_idx+1]
@@ -216,7 +238,6 @@ def get_fitness(indiv, dataset):
     y_pred = []
     x_pred = []
     x_indices = []
-    #print(indiv)
     for i in range(len(x_vals)):
         try:
             y_pred.append(evaluator(indiv,x_vals[i]))
@@ -224,105 +245,145 @@ def get_fitness(indiv, dataset):
             x_indices.append(i)
         except ZeroDivisionError:
             continue
-    #print("=====")
-    #print(y_pred)
-    #print(indiv)
+
     y_vals = [y_vals[i] for i in x_indices]
-    return(MSE(y_vals, y_pred) + 0.003*len(indiv))
-    #return(MSE(y_vals, y_pred))
+    if y_vals ==[]:
+
+        raise ValueError
+    return(MSE(y_vals, y_pred) + .007*len(indiv))
 
 
 
 
 def GP_trunc(n_gen, init_population, dataset, c_rate, mut_rate):
-    #init population [done]
-    #choose parent pairs [done]
-    #cross all parent pairs [done]
-    #mutate cross results (offspring)
-    #deterministic crowding competition
-    #fitness evaluations
+
     initial_population = [fgen(4) for i in range(init_population)]
-    
     fitnesses = [get_fitness(i,dataset) for i in initial_population]
-    #sum_f = sum(fitnesses)
-    #fitnesses = [i/sum_f for i in fitnesses]
+    print(sorted(fitnesses))
     best_fits = []
     pool = []
     pool_size = 0
     for i in range(n_gen):
         print("Generation: ", i+1)
-        initial_population = [x for y, x in sorted(zip(fitnesses, initial_population), key=lambda tup: tup[0])]
+        initial_population = [initial_population[i] for i in np.argsort(fitnesses)]
         initial_population = initial_population[:len(initial_population)-5]
         initial_population = initial_population[:int(.5*len(initial_population))] #selection
-        
         fitnesses = sorted(fitnesses)
-        #print("BAAAA", fitnesses)
         fitnesses = fitnesses[:len(fitnesses)-5]
         fitnesses = fitnesses[:int(.5*len(fitnesses))]
-        
         
         while pool_size < 2*len(initial_population):
             couple = np.random.choice([i for i in range(len(initial_population))], size=2, replace=False)
             couple = [initial_population[couple[0]], initial_population[couple[1]]]
-            
-            if random.choices([True, False], weights=[c_rate,1], k=1)[0]:
+            if random.choices([True, False], weights=[c_rate,1-c_rate], k=1)[0]:
                 print(len(couple[0]), len(couple[1]))
                 children = cross_parents(couple)
+                children = [mutator_aggressive(i, mut_rate) for i in children] #mutate
             else:
-                children = couple
-            [mutator(i, mut_rate) for i in children] #mutate
+                children = []
+
             for i in children:
-                if len(i) < 110 and "x" in i:
-                    pool.append(i)
-                    pool_size +=1
-                else:
-                    pool.append(fgen(4))
-                    pool_size +=1
+                try:
+                    evaluator(i,10)
+                    if len(i) < 110 and "x" in i:
+                        pool.append(i)
+                        pool_size +=1
+                except ZeroDivisionError:
+                    continue
+                
         fitnesses = fitnesses[:5] + [get_fitness(individual, dataset) for individual in pool]
-        #print(fitnesses)
-        assert True
+        print(sorted(fitnesses))
         initial_population = initial_population[:5] + pool 
-        
-        # fitnesses = [get_fitness(individual, dataset) for individual in pool]
-        # initial_population = pool 
-        
-        
         pool = []
         pool_size = 0 
         best_fits.append(min(fitnesses))
     
-    final_population = [x for y, x in sorted(zip(fitnesses, initial_population), key=lambda tup: tup[0])]
-
+    final_population = [initial_population[i] for i in np.argsort(fitnesses)]
     return(final_population,best_fits)
+
     
+def hill_climber(n_iterations, data):
+    current_t = fgen(4)
+    current_fit = get_fitness(current_t, data)
 
+    next_t = mutator(current_t, 10000000)
+    next_fit = get_fitness(next_t, data)
+    all_bests = []
+    for i in range(n_iterations):
+        if next_fit < current_fit:
+            current_t = next_t
+            current_fit = next_fit
+            all_bests.append(current_fit)    
+        next_t = mutator(current_t, 10000000)
+        next_fit = get_fitness(next_t, data)
+    if next_fit < current_fit:
+        best_fit = next_fit
+        best_t = next_t
+    else:
+        best_fit = current_fit
+        best_t = current_t
 
-def GP_detcrow():
-        #     while pool_size < len(initial_population):
-        #     couple = np.random.choice(initial_population, size=2, p=fitnesses, replace=False)
-        #     children = cross_parents(couple)
-        #     replacements = det_crowding(couple, children)
-        #     [pool.append(i) for i in replacements]
-        # initial_population = pool
-        # fitnesses = [get_fitness(individual, dataset) for individual in initial_population]
-        # pool = 0
-        # pool_size = 0 
-    pass
+    return(best_fit, best_t, all_bests)
+
 
 def mutator(tree, mut_rate):
-    mutation = random.choices([True, False], weights=[mut_rate, 1], k=1)[0]
+    mutation = random.choices([True, False], weights=[mut_rate, 1-mut_rate], k=1)[0]
     if not mutation:
         return(tree)
     valid_ids = []
+    #print(True)
     for idx, val in enumerate(tree):
         if type(val) == float:
             valid_ids.append(idx)
-    new_vals = [tree[i] + random.uniform(-1,1) for i in valid_ids]
+    new_vals = [random.choice([-tree[i]*1.1,tree[i]*1.1]) for i in valid_ids]
 
     for i in range(len(valid_ids)):
         tree[valid_ids[i]] = new_vals[i]
 
     return(tree)
+
+def mutator_aggressive(tree, mut_rate):
+    '''aggressive mutation by adding the option of mutating operators'''
+    mutation = random.choices([True, False], weights=[mut_rate, 1-mut_rate], k=1)[0]
+    
+    if not mutation:
+        return(tree)
+    wtree = tree.copy()
+    done = False
+    while not done:
+        print(3)
+        lucky_node = random.choice([i for i in range(1,len(wtree))]) #choose a lucky node
+        if callable(wtree[lucky_node]):
+            if wtree[lucky_node] == sin:
+                #replace with cosine
+                wtree[lucky_node] = cos
+                done = True
+                
+            elif wtree[lucky_node] == cos:
+                #replace with sin
+                wtree[lucky_node] = sin
+                done = True
+            else:
+                ops = [add, subtract, multiply, divide]
+                #op_functions = {"+": add, "-": subtract, "*": multiply, "/": divide}
+                ops.remove(wtree[lucky_node])
+                wtree[lucky_node] = random.choice(ops)
+                done = True
+        elif type(wtree[lucky_node]) == float:
+            wtree[lucky_node] = float(random.choice([-10,10]))
+            done = True
+        else:
+            continue
+
+        try:
+            evaluator(wtree, 10)
+        except ZeroDivisionError:
+            done = False
+    #print("eee")
+    #print(wtree)
+    return(wtree)
+
+
 
 
 
@@ -363,38 +424,27 @@ def cross_parents(couple):
     while bad:
         left_idx = random.choice(range(2, len(couple[0])))
         right_idx = random.choice(range(2, len(couple[1])))
-        #print("indices: , ", left_idx, right_idx)
-
-        
         if (couple[0][left_idx] == None) or (couple[1][right_idx] == None):
             bad = True
         else:
             bad = False
-
     l_idx_depth = math.floor(math.log(left_idx)/math.log(2))
     r_idx_depth = math.floor(math.log(right_idx)/math.log(2))
     delta = right_idx-left_idx
     left_nodes = [left_idx] + get_subnodes(couple[0], left_idx)
     right_nodes = [right_idx] + get_subnodes(couple[1], right_idx)
-
-
     l_nodes_trans = []
     r_nodes_trans = []
     new_r_tree = couple[1].copy()
     new_l_tree = couple[0].copy()
-
-
     for i in left_nodes:
         new_l_tree[i] = None
         i_depth = math.floor(math.log(i)/math.log(2))
         l_nodes_trans.append(i + delta* 2 **(i_depth -l_idx_depth))
-    
     for j in right_nodes:
         new_r_tree[j] = None
         j_depth = math.floor(math.log(j)/math.log(2))
         r_nodes_trans.append(j - delta* 2 **(j_depth -r_idx_depth))
-
-
     for i in range(len(l_nodes_trans)):
         try:
             new_r_tree[l_nodes_trans[i]] = couple[0][left_nodes[i]]
@@ -402,8 +452,6 @@ def cross_parents(couple):
             for j in range(l_nodes_trans[i]+1 - len(new_r_tree)):
                 new_r_tree.append(None) 
             new_r_tree[l_nodes_trans[i]] = couple[0][left_nodes[i]]
-            
-
     for i in range(len(r_nodes_trans)):
         try:
             new_l_tree[r_nodes_trans[i]] = couple[1][right_nodes[i]]
@@ -411,8 +459,6 @@ def cross_parents(couple):
             for j in range(r_nodes_trans[i]+1 - len(new_l_tree)):
                 new_l_tree.append(None) 
             new_l_tree[r_nodes_trans[i]] = couple[1][right_nodes[i]]
-
-
     return(new_l_tree, new_r_tree)
     
 
@@ -432,7 +478,7 @@ def plot_soln(tree, dataset):
             x_indices.append(i)
         except ZeroDivisionError:
             continue
-    fitness = np.mean([(y_vals[x_indices[i]]-y_pred[i])**2 for i in range(len(x_indices))])/len(x_indices)
+    fitness = sum([(y_vals[x_indices[i]]-y_pred[i])**2 for i in range(len(x_indices))])/len(x_indices) #with no length loss term
 
 
     print(fitness)
@@ -448,11 +494,29 @@ def plot_soln(tree, dataset):
 
 
 if __name__ == "__main__":
-    
     data = read_data()
-    soln, fitnesses = GP_trunc(800, 50, data, 0.75, 0.1)
+
+ 
+
+    #a = [None, multiply, "x", subtract, None, None, 17.0000, "x"]
+    #print(mutator_aggressive(a,1))
+    # print(get_fitness(a, data))
+    soln, fitnesses = GP_trunc(400, 200, data, 0.9, 0.2)
     soln = soln[0]
     print(soln)
-    print(fitnesses)
-    print(get_fitness(soln, data))
-    plot_soln(soln,data)
+    #print(fitnesses)
+    # # # print(get_fitness(soln, data))
+    plot_soln(soln, data)
+    # # # plt.show()
+    plt.plot([i for i in range(len(fitnesses))], fitnesses)
+    plt.show()
+    # # plt.show()
+    # for i in range(10):
+    #     f = fgen(5)
+    #     y = [evaluator(f,j) for j in [k for k in range(0,10,.1)]]
+    #     plt.plot([k for k in range(0,10,.1)], y)
+    #     plt.show()
+    #[plot_soln(fgen(5),data) for i in range(10)]
+    
+    #print(evaluator(a,10))
+    #print(get_fitness(a,data))
