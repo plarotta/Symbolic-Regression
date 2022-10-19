@@ -250,14 +250,14 @@ def get_fitness(indiv, dataset):
     if y_vals ==[]:
 
         raise ValueError
-    return(MSE(y_vals, y_pred) + .007*len(indiv))
+    return(MSE(y_vals, y_pred) + .005*len(indiv))
 
 
 
 
 def GP_trunc(n_gen, init_population, dataset, c_rate, mut_rate):
 
-    initial_population = [fgen(4) for i in range(init_population)]
+    initial_population = [fgen(5) for i in range(init_population)]
     fitnesses = [get_fitness(i,dataset) for i in initial_population]
     print(sorted(fitnesses))
     best_fits = []
@@ -280,16 +280,7 @@ def GP_trunc(n_gen, init_population, dataset, c_rate, mut_rate):
                 children = cross_parents(couple)
                 children = [mutator_aggressive(i, mut_rate) for i in children] #mutate
             else:
-                children = []
-
-            for i in children:
-                try:
-                    evaluator(i,10)
-                    if len(i) < 110 and "x" in i:
-                        pool.append(i)
-                        pool_size +=1
-                except ZeroDivisionError:
-                    continue
+                children = [fgen(5), fgen(5)]
                 
         fitnesses = fitnesses[:5] + [get_fitness(individual, dataset) for individual in pool]
         print(sorted(fitnesses))
@@ -300,6 +291,99 @@ def GP_trunc(n_gen, init_population, dataset, c_rate, mut_rate):
     
     final_population = [initial_population[i] for i in np.argsort(fitnesses)]
     return(final_population,best_fits)
+
+
+def get_distance(indiv1, indiv2):
+    test_nums = [0,1,5,7.5,10,15]
+    #print(indiv1,indiv2)
+    try:
+        y1s = [evaluator(indiv1,i) for i in test_nums]
+        y2s = [evaluator(indiv2,i) for i in test_nums]
+    except ZeroDivisionError:
+        print(indiv1)
+        print(indiv2)
+        raise ValueError
+
+    return(sum([(y1s[i]-y2s[i])**2 for i in range(len(test_nums))])/len(y1s))
+
+def GP_crowded(n_gen, init_population, dataset, c_rate, mut_rate):
+    initial_population = [fgen(5) for i in range(init_population)]
+    fitnesses = [get_fitness(i,dataset) for i in initial_population]
+    print(sorted(fitnesses))
+    best_fits = []
+    pool = []
+    pool_size = 0
+
+
+    for gen in range(n_gen):
+        print("Generation number: ", gen)
+        while pool_size < init_population:
+            couple = np.random.choice([i for i in range(len(initial_population))], size=2, replace=False)
+            #print(couple)
+            #print("posidnj", len(initial_population))
+            couple = [initial_population[couple[0]], initial_population[couple[1]]]
+            [initial_population.remove(i) for i in couple]       
+            children = cross_parents(couple)
+            p1_f = get_fitness(couple[0],dataset); p2_f = get_fitness(couple[1],dataset)
+            c1_f = get_fitness(children[0],dataset); c2_f = get_fitness(children[1],dataset)
+            
+            if (get_distance(couple[0], children[0]) + get_distance(couple[1], children[1])) <= (get_distance(couple[0], children[1]) + get_distance(couple[1], children[0])):
+                if c2_f < p2_f:
+                    mut = mutator_aggressive(children[1],mut_rate)
+                    if get_fitness(mut,dataset) < c2_f:
+                        print(len(mut))
+                        pool.append(mut)
+                    else:
+                        print(len(children[1]))
+                        pool.append(children[1]) 
+                else:
+                    print(len(couple[1]))
+                    pool.append(couple[1])
+                if c1_f < p1_f:
+                    mut = mutator_aggressive(children[0],mut_rate)
+                    if get_fitness(mut,dataset) < c1_f:
+                        print(len(mut))
+                        pool.append(mut)
+                    else:
+                        print(len(children[0]))
+                        pool.append(children[0]) 
+                else:
+                    print(len(couple[0]))
+                    pool.append(couple[0])
+            else:
+                if c2_f < p1_f:
+                    mut = mutator_aggressive(children[1],mut_rate)
+                    if get_fitness(mut,dataset) < c2_f:
+                        print(len(mut))
+                        pool.append(mut)
+                    else:
+                        print(len(children[1]))
+                        pool.append(children[1]) 
+                else:
+                    print(len(couple[0]))
+                    pool.append(couple[0])
+                if c1_f < p2_f:
+                    mut = mutator_aggressive(children[0],mut_rate)
+                    if get_fitness(mut,dataset) < c1_f:
+                        print(len(mut))
+                        pool.append(mut)
+                    else:
+                        print(len(children[0]))
+                        pool.append(children[0]) 
+                else:
+                    print(len(couple[1]))
+                    pool.append(couple[1])
+            pool_size += 2
+        initial_population = pool
+        #print(pool)
+        fitnesses = [get_fitness(i,dataset) for i in initial_population]
+        best_fits.append(min(fitnesses))
+        pool_size = 0
+    
+    final_population = [initial_population[i] for i in np.argsort(fitnesses)]
+    return(final_population, best_fits)
+
+
 
     
 def hill_climber(n_iterations, data):
@@ -351,7 +435,7 @@ def mutator_aggressive(tree, mut_rate):
     wtree = tree.copy()
     done = False
     while not done:
-        print(3)
+        #print(3)
         lucky_node = random.choice([i for i in range(1,len(wtree))]) #choose a lucky node
         if callable(wtree[lucky_node]):
             if wtree[lucky_node] == sin:
@@ -376,7 +460,7 @@ def mutator_aggressive(tree, mut_rate):
             continue
 
         try:
-            evaluator(wtree, 10)
+            evaluator(wtree, 0)
         except ZeroDivisionError:
             done = False
     #print("eee")
@@ -426,39 +510,49 @@ def cross_parents(couple):
         right_idx = random.choice(range(2, len(couple[1])))
         if (couple[0][left_idx] == None) or (couple[1][right_idx] == None):
             bad = True
+            continue
         else:
             bad = False
-    l_idx_depth = math.floor(math.log(left_idx)/math.log(2))
-    r_idx_depth = math.floor(math.log(right_idx)/math.log(2))
-    delta = right_idx-left_idx
-    left_nodes = [left_idx] + get_subnodes(couple[0], left_idx)
-    right_nodes = [right_idx] + get_subnodes(couple[1], right_idx)
-    l_nodes_trans = []
-    r_nodes_trans = []
-    new_r_tree = couple[1].copy()
-    new_l_tree = couple[0].copy()
-    for i in left_nodes:
-        new_l_tree[i] = None
-        i_depth = math.floor(math.log(i)/math.log(2))
-        l_nodes_trans.append(i + delta* 2 **(i_depth -l_idx_depth))
-    for j in right_nodes:
-        new_r_tree[j] = None
-        j_depth = math.floor(math.log(j)/math.log(2))
-        r_nodes_trans.append(j - delta* 2 **(j_depth -r_idx_depth))
-    for i in range(len(l_nodes_trans)):
-        try:
-            new_r_tree[l_nodes_trans[i]] = couple[0][left_nodes[i]]
-        except IndexError:
-            for j in range(l_nodes_trans[i]+1 - len(new_r_tree)):
-                new_r_tree.append(None) 
-            new_r_tree[l_nodes_trans[i]] = couple[0][left_nodes[i]]
-    for i in range(len(r_nodes_trans)):
-        try:
-            new_l_tree[r_nodes_trans[i]] = couple[1][right_nodes[i]]
-        except IndexError:
-            for j in range(r_nodes_trans[i]+1 - len(new_l_tree)):
-                new_l_tree.append(None) 
-            new_l_tree[r_nodes_trans[i]] = couple[1][right_nodes[i]]
+            l_idx_depth = math.floor(math.log(left_idx)/math.log(2)); r_idx_depth = math.floor(math.log(right_idx)/math.log(2))
+            delta = right_idx-left_idx
+            left_nodes = [left_idx] + get_subnodes(couple[0], left_idx); right_nodes = [right_idx] + get_subnodes(couple[1], right_idx)
+            l_nodes_trans = []; r_nodes_trans = []
+            new_r_tree = couple[1].copy(); new_l_tree = couple[0].copy()
+            for i in left_nodes:
+                new_l_tree[i] = None
+                i_depth = math.floor(math.log(i)/math.log(2))
+                l_nodes_trans.append(i + delta* 2 **(i_depth -l_idx_depth))
+            for j in right_nodes:
+                new_r_tree[j] = None
+                j_depth = math.floor(math.log(j)/math.log(2))
+                r_nodes_trans.append(j - delta* 2 **(j_depth -r_idx_depth))
+            for i in range(len(l_nodes_trans)):
+                try:
+                    new_r_tree[l_nodes_trans[i]] = couple[0][left_nodes[i]]
+                except IndexError:
+                    for j in range(l_nodes_trans[i]+1 - len(new_r_tree)):
+                        new_r_tree.append(None) 
+                    new_r_tree[l_nodes_trans[i]] = couple[0][left_nodes[i]]
+            for i in range(len(r_nodes_trans)):
+                try:
+                    new_l_tree[r_nodes_trans[i]] = couple[1][right_nodes[i]]
+                except IndexError:
+                    for j in range(r_nodes_trans[i]+1 - len(new_l_tree)):
+                        new_l_tree.append(None) 
+                    new_l_tree[r_nodes_trans[i]] = couple[1][right_nodes[i]]
+
+            for i in [new_l_tree, new_r_tree]:
+                try:
+                    evaluator(i,0)
+                    if len(i) < 120 and "x" in i:
+                        pass
+                    else:
+                        bad = True
+                except ZeroDivisionError:
+                    bad = True
+                    continue
+
+    
     return(new_l_tree, new_r_tree)
     
 
@@ -498,19 +592,21 @@ if __name__ == "__main__":
 
  
 
-    #a = [None, multiply, "x", subtract, None, None, 17.0000, "x"]
+    # a = [None, multiply, 3, add, None, None, 17, "x"]
+    # b =  [None, multiply, "x", subtract, None, None, 17.0000, "x"]
+    # print(get_distance(a,b))
     #print(mutator_aggressive(a,1))
     # print(get_fitness(a, data))
-    soln, fitnesses = GP_trunc(400, 200, data, 0.9, 0.2)
+    soln, fitnesses = GP_crowded(800, 60, data, 0.8, 0.2)
     soln = soln[0]
     print(soln)
-    #print(fitnesses)
-    # # # print(get_fitness(soln, data))
+    print(fitnesses)
+    # # # # print(get_fitness(soln, data))
     plot_soln(soln, data)
-    # # # plt.show()
+    # # # # plt.show()
     plt.plot([i for i in range(len(fitnesses))], fitnesses)
     plt.show()
-    # # plt.show()
+    # # # plt.show()
     # for i in range(10):
     #     f = fgen(5)
     #     y = [evaluator(f,j) for j in [k for k in range(0,10,.1)]]
