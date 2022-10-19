@@ -6,7 +6,7 @@ import time
 from sklearn.metrics import mean_squared_error
 
 def read_data():
-  f = open("data2022_Silver.txt", "r")
+  f = open("data2022_Bronze.txt", "r")
   data = []
   while(True):
       line = f.readline()
@@ -250,7 +250,7 @@ def get_fitness(indiv, dataset):
     if y_vals ==[]:
 
         raise ValueError
-    return(MSE(y_vals, y_pred) + .005*len(indiv))
+    return(MSE(y_vals, y_pred) + .008*len(indiv))
 
 
 
@@ -454,7 +454,7 @@ def mutator_aggressive(tree, mut_rate):
                 wtree[lucky_node] = random.choice(ops)
                 done = True
         elif type(wtree[lucky_node]) == float:
-            wtree[lucky_node] = float(random.choice([-10,10]))
+            wtree[lucky_node] = float(random.uniform(-10,10))
             done = True
         else:
             continue
@@ -597,7 +597,7 @@ if __name__ == "__main__":
     # print(get_distance(a,b))
     #print(mutator_aggressive(a,1))
     # print(get_fitness(a, data))
-    soln, fitnesses = GP_crowded(800, 60, data, 0.8, 0.2)
+    soln, fitnesses = GP_crowded(100, 60, data, 0.8, 0.2)
     soln = soln[0]
     print(soln)
     print(fitnesses)
