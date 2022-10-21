@@ -1,3 +1,4 @@
+from statistics import mean
 import numpy as np
 import random
 import matplotlib.pyplot as plt 
@@ -7,7 +8,7 @@ from sklearn.metrics import mean_squared_error
 import pickle
 
 def read_data():
-  f = open("data2022_Gold.txt", "r")
+  f = open("data2022_Platinum.txt", "r")
   data = []
   while(True):
       line = f.readline()
@@ -292,6 +293,23 @@ def get_distance(indiv1, indiv2):
 
     return(np.sqrt( sum([(y1s[i]-y2s[i])**2 for i in range(len(test_nums))])/len(y1s) ))
 
+def get_distance2(indiv1, indiv2):
+    test_nums = [1,2,5,7.5,10,15]
+
+    y1s = [evaluator(indiv1,i) for i in test_nums]
+    y2s = [evaluator(indiv2,i) for i in test_nums]
+    # print(y1s, y2s)
+    # try:
+    #     res = mean([(abs(y1s[i]-y2s[i])+1)/(abs(mean([y1s[i], y2s[i]]))+1) for i in range(len(y1s))])
+
+    # except ZeroDivisionError:
+    #     res = mean([(abs(y1s[i]-y2s[i])+1)/(abs(mean([y1s[i], y2s[i]]))+1) for i in range(len(y1s))])
+
+
+
+    return(mean([(abs(y1s[i]-y2s[i])+1)/(abs(mean([y1s[i], y2s[i]]))+1) for i in range(len(y1s))]))
+
+
 def GP_crowded(n_gen, init_population, dataset, c_rate, mut_rate):
     initial_population = [fgen(5) for i in range(init_population)]
     fitnesses = [get_fitness(i,dataset) for i in initial_population]
@@ -304,6 +322,9 @@ def GP_crowded(n_gen, init_population, dataset, c_rate, mut_rate):
 
     for gen in range(n_gen):
         print("Generation number: ", gen)
+        print("huh",len(initial_population))
+        initial_population = [initial_population[i] for i in np.argsort(fitnesses)]
+        initial_population = initial_population[:int(.5*len(initial_population))]
         while pool_size < init_population:
             couple = np.random.choice([i for i in range(len(initial_population))], size=2, replace=False)
             #print(couple)
@@ -312,7 +333,7 @@ def GP_crowded(n_gen, init_population, dataset, c_rate, mut_rate):
             children = cross_parents(couple)
             p1_f = get_fitness(couple[0],dataset); p2_f = get_fitness(couple[1],dataset)
             c1_f = get_fitness(children[0],dataset); c2_f = get_fitness(children[1],dataset)
-            if get_distance(couple[0], children[0]) + get_distance(couple[1], children[1]) < get_distance(couple[0], children[1]) + get_distance(couple[1], children[0]):
+            if get_distance2(couple[0], children[0]) + get_distance2(couple[1], children[1]) < get_distance2(couple[0], children[1]) + get_distance2(couple[1], children[0]):
                 if c2_f < p2_f:
                     mut = mutator_aggressive(children[1],mut_rate)
                     if get_fitness(mut,dataset) < c2_f:
@@ -347,7 +368,7 @@ def GP_crowded(n_gen, init_population, dataset, c_rate, mut_rate):
                 else:
                     pool.append(couple[1])
             print("kid lengths: ",len(pool[0]),len(pool[1]))
-            pool_size += 2
+            pool_size = len(pool)
         
         
         # div = []
@@ -357,91 +378,118 @@ def GP_crowded(n_gen, init_population, dataset, c_rate, mut_rate):
 
         initial_population = pool
         fitnesses = [get_fitness(i,dataset) for i in initial_population]
+
         print("gen best = ", min(fitnesses))
         best_fits.append(min(fitnesses))
         pool_size = 0
     
     final_population = [initial_population[i] for i in np.argsort(fitnesses)]
     return(final_population, best_fits)
+
+def det_crowd(next_pop, parents, children, dataset, mut_rate, current_population):
+    p1_f = get_fitness(parents[0],dataset)
+    p2_f = get_fitness(parents[1],dataset)
+    c1_f = get_fitness(children[0],dataset) 
+    c2_f = get_fitness(children[1],dataset)
+    if get_distance2(parents[0], children[0]) + get_distance2(parents[1], children[1]) < get_distance2(parents[0], children[1]) + get_distance2(parents[1], children[0]):
+        if c2_f < p2_f:
+            mut = mutator_aggressive(children[1],mut_rate)
+            if get_fitness(mut,dataset) < c2_f:
+                next_pop.add(tuple(mut))
+            else:
+                next_pop.add(tuple(children[1])) 
+        else:
+            next_pop.add(tuple(parents[1]))
+        if c1_f < p1_f:
+            mut = mutator_aggressive(children[0],mut_rate)
+            if get_fitness(mut,dataset) < c1_f:
+                next_pop.add(tuple(mut))
+            else:
+                next_pop.add(tuple(children[0]))
+        else:
+            next_pop.add(tuple(parents[0]))
+    else:
+        if c2_f < p1_f:
+            mut = mutator_aggressive(children[1],mut_rate)
+            if get_fitness(mut,dataset) < c2_f:
+                next_pop.add(tuple(mut))
+            else:
+                next_pop.add(tuple(children[1])) 
+        else:
+            next_pop.add(tuple(parents[0]))
+        if c1_f < p2_f:
+            mut = mutator_aggressive(children[0],mut_rate)
+            if get_fitness(mut,dataset) < c1_f:
+                next_pop.add(tuple(mut))
+            else:
+                next_pop.add(tuple(children[0])) 
+        else:
+            next_pop.add(tuple(parents[1]))
 
 
 def GP_crowded2(n_gen, init_population, dataset, c_rate, mut_rate):
-    initial_population = [fgen(5) for i in range(init_population)]
-    fitnesses = [get_fitness(i,dataset) for i in initial_population]
-    initial_population = [initial_population[i] for i in np.argsort(fitnesses)]
-    print(sorted(fitnesses))
-    best_fits = []
-    pool = []
-    pool_size = 0
+    # initialize starting population
+    # calculate the fitnesses for the population and sort population accordingly
 
-
-    for gen in range(n_gen):
-        print("Generation number: ", gen)
-        while pool_size < init_population:
-            #try breeding only the top 10%
-            print(initial_population)
-            couple = np.random.choice([i for i in range(len(initial_population))], size=2, replace=False)
-            #print(couple)
-            couple = [initial_population[couple[0]], initial_population[couple[1]]]
-            [initial_population.remove(i) for i in couple]    
-            children = cross_parents(couple)
-            p1_f = get_fitness(couple[0],dataset); p2_f = get_fitness(couple[1],dataset)
-            c1_f = get_fitness(children[0],dataset); c2_f = get_fitness(children[1],dataset)
-            if (get_distance(couple[0], children[0]) + get_distance(couple[1], children[1])) <= (get_distance(couple[0], children[1]) + get_distance(couple[1], children[0])):
-                if c2_f < p2_f:
-                    #print("child")
-                    mut = mutator_aggressive(children[1],mut_rate)
-                    if get_fitness(mut,dataset) < c2_f:
-                        pool.append(mut)
-                    else:
-                        pool.append(children[1]) 
-                else:
-                    pool.append(couple[1])
-                if c1_f < p1_f:
-                    #print("child")
-                    mut = mutator_aggressive(children[0],mut_rate)
-                    if get_fitness(mut,dataset) < c1_f:
-                        pool.append(mut)
-                    else:
-                        pool.append(children[0]) 
-                else:
-                    pool.append(couple[0])
-            else:
-                if c2_f < p1_f:
-                    #print("child")
-                    mut = mutator_aggressive(children[1],mut_rate)
-                    if get_fitness(mut,dataset) < c2_f:
-                        pool.append(mut)
-                    else:
-                        pool.append(children[1]) 
-                else:
-                    pool.append(couple[0])
-                if c1_f < p2_f:
-                    #print("child")
-                    mut = mutator_aggressive(children[0],mut_rate)
-                    if get_fitness(mut,dataset) < c1_f:
-                        pool.append(mut)
-                    else:
-                        pool.append(children[0]) 
-                else:
-                    pool.append(couple[1])
-            
-            pool = [tuple(i) for i in pool]
-            pool = set(pool)
-            pool = [list(i) for i in pool]
-            pool_size = len(pool)
-        print(pool)
-        initial_population = pool
-        fitnesses = [get_fitness(i,dataset) for i in initial_population]
-        initial_population = [initial_population[i] for i in np.argsort(fitnesses)] 
-
-        print("gen best = ", min(fitnesses))
-        best_fits.append(min(fitnesses))
-        pool_size = 0
+    # repeat for each generation
+        # initialize set for storing the individuals for the next generation
+        # repeat until the population for the next generation is ready
+            # select 2 parents from current generation
+            # crossover the 2 parents
+            # select who moves to the next generation via deterministic crowding
+            # add the 2 diverse and fit bois to the next generation's population
+        # replace the current generation population with the next generation's population
+        # calculate the fitnesses for the population and sort population accordingly
+        # check generation diversity
+        # store the value of the best fitness of the generation
     
-    final_population = [initial_population[i] for i in np.argsort(fitnesses)]
-    return(final_population, best_fits)
+    #return the best individual of the latest generation
 
+    current_pop = [fgen(4) for i in range(init_population)]
+    fits = [get_fitness(i,dataset) for i in current_pop]
+    # fit_dict = {}
+    # for i in range(len(fits)):
+    #     fit_dict[i] = fits[i]
+    current_pop = [current_pop[i] for i in np.argsort(fits)]
+    best_fits = []
+    #fitnesses = [get_fitness(i, dataset) for i in initial_population]
+
+    for i in range(n_gen):
+        print("Starting generation ", str(i+1),"...")
+        #print(fits)
+        next_gen = set()
+        while len(next_gen) < init_population:
+            #print('len =', len(next_gen))
+            parents = selection(current_pop, 0.2, dataset)
+            children = cross_parents(parents)
+            print('children_size= ', len(children[0]),len(children[1]))
+            det_crowd(next_gen,parents,children,dataset,mut_rate,current_pop)
+            next_gen.add(tuple(fgen(4)))
+            next_gen.add(tuple(fgen(4)))
+
+        
+        # current_pop = [list(i) for i in next_gen] + current_pop[:5] #elitism
+        current_pop = [list(i) for i in next_gen] 
+        fits = [get_fitness(i, dataset) for i in current_pop]
+        current_pop = [current_pop[i] for i in np.argsort(fits)]
+        # current_pop = current_pop[:-5]
+        #print(current_pop)
+        print("Gen best: ",min(fits))
+        best_fits.append(min(fits))
+        #diversity check
+        #store diversity value
+    print(sorted(fits))
+    print(current_pop[0])
+    
+    return(current_pop[0],best_fits)
+
+
+
+def selection(population, p_c, dataset, method="rank"):
+    if method == "rank":
+        probabilities = np.array([((1-p_c)**((i+1)-1))*p_c for i in range(len(population)-1)] + [(1-p_c)**(len(population))])
+        probabilities /= probabilities.sum()
+    return(np.random.choice(population,size=2, p=probabilities, replace=False))
 
 
     
@@ -457,6 +505,7 @@ def hill_climber(n_iterations, data):
     all_bests.append(next_fit)
     
     for i in range(n_iterations):
+        print(i)
         if next_fit < current_fit:
             current_t = next_t
             current_fit = next_fit
@@ -607,7 +656,7 @@ def cross_parents(couple):
                     if len(i) < 110 and "x" in i:
                         pass
                     elif i == [None, subtract, 'x', 'x']:
-                        print("poop")
+                        
                         bad = True
                     else:
                         bad = True
@@ -639,23 +688,130 @@ def plot_soln(tree, dataset):
 
 
     print(fitness)
+    print(tree)
 
 
-    plt.plot(x_vals, y_vals)
-    plt.plot(x_pred, y_pred)
+    plt.plot(x_vals, y_vals,"y")
+    plt.plot(x_pred, y_pred,"kx", markersize = 2)
+    plt.title("Best fit: y = ( sin(1.5001x) * sin( cos( sin(-7.434) ) )"+"\n" +"RMSE: " + str(fitness))
+    
     plt.show()  
     
 
+def process_n_plot(data):
+    random_res = pickle.load(open( "symreg_results/random_res", "rb"))
+    rmhc_res = pickle.load(open( "symreg_results/rmhc_res", "rb"))
+    trunc_res = pickle.load(open( "symreg_results/trunc_res", "rb"))
+    trunc_soln = pickle.load(open( "symreg_results/trunc_funcs", "rb"))
+    d_res = pickle.load(open( "symreg_results/detcrow_res", "rb"))
+    d_soln = pickle.load(open( "symreg_results/detcrow_funcs", "rb"))
 
+    ra_res_fixed = []
+    for k in range(5):
+        fix_r = [random_res[k][0]]
+        for i in random_res[k]:
+            if i < fix_r[-1]:
+                fix_r.append(i)
+            else:
+                fix_r.append(fix_r[-1])
+        ra_res_fixed.append(fix_r)
+
+
+    rm_res_fixed = []
+    for k in range(5):
+        fix_r = [rmhc_res[k][0]]
+        for i in rmhc_res[k]:
+            if i < fix_r[-1]:
+                fix_r.append(i)
+            else:
+                fix_r.append(fix_r[-1])
+        rm_res_fixed.append(fix_r)
+
+
+
+    GA_trunc_res_fixed = []
+    for k in range(5):
+        fix_r = [trunc_res[k][0]]
+        for i in trunc_res[k]:
+            if i < fix_r[-1]:
+                fix_r.append(i)
+            else:
+                fix_r.append(fix_r[-1])
+        GA_trunc_res_fixed.append(fix_r)
+    
+
+    GA_d_res_fixed = []
+    for k in range(5):
+        fix_r = [d_res[k][0]]
+        for i in d_res[k]:
+            if i < fix_r[-1]:
+                fix_r.append(i)
+            else:
+                fix_r.append(fix_r[-1])
+        GA_d_res_fixed.append(fix_r)
+
+
+    ###############
+    error_xvals = [i for i in range(0,int(100000/50),int(10000/50))]
+    ra_mean1 = [mean([GA_d_res_fixed[0][i], GA_d_res_fixed[1][i], GA_d_res_fixed[2][i],GA_d_res_fixed[3][i],GA_d_res_fixed[4][i]]) for i in range(2001)]
+    ra_mean2 = [mean([GA_d_res_fixed[0][i], GA_d_res_fixed[1][i], GA_d_res_fixed[2][i],GA_d_res_fixed[3][i],GA_d_res_fixed[4][i]]) for i in error_xvals]
+    ra_sem = [np.std([GA_d_res_fixed[0][i], GA_d_res_fixed[1][i], GA_d_res_fixed[2][i],GA_d_res_fixed[3][i],GA_d_res_fixed[4][i]])/np.sqrt(5) for i in error_xvals]
+    plt.plot([i*50 for i in range(2001)], ra_mean1, "m")
+    plt.errorbar([i*50 for i in error_xvals],ra_mean2,yerr = ra_sem, fmt = 'o', ecolor = "black", elinewidth=2, capsize=2, markersize=5,markeredgecolor="black",markerfacecolor="black")
+    plt.xlabel('Number of Evaluations')
+    plt.ylabel('RMSE')
+
+    
+
+    ###################
+    
+    error_xvals = [i for i in range(0,100000,10000)]
+    ra_mean1 = [mean([rm_res_fixed[0][i], rm_res_fixed[1][i], rm_res_fixed[2][i],rm_res_fixed[3][i],rm_res_fixed[4][i]]) for i in range(100001)]
+    ra_mean2 = [mean([rm_res_fixed[0][i], rm_res_fixed[1][i], rm_res_fixed[2][i],rm_res_fixed[3][i],rm_res_fixed[4][i]]) for i in error_xvals]
+    ra_sem = [np.std([rm_res_fixed[0][i], rm_res_fixed[1][i], rm_res_fixed[2][i],rm_res_fixed[3][i],rm_res_fixed[4][i]])/np.sqrt(5) for i in error_xvals]
+    plt.plot([i for i in range(100001)], ra_mean1, "g")
+    plt.errorbar(error_xvals,ra_mean2,yerr = ra_sem, fmt = 'o', ecolor = "black", elinewidth=2, capsize=2, markersize=5,markeredgecolor="black",markerfacecolor="black")
+    plt.xlabel('Number of Evaluations')
+    plt.ylabel('RMSE')
+    plt.yscale("log")
+    ###############
+    error_xvals = [i for i in range(0,int(100000/50),int(10000/50))]
+    ra_mean1 = [mean([GA_trunc_res_fixed[0][i], GA_trunc_res_fixed[1][i], GA_trunc_res_fixed[2][i],GA_trunc_res_fixed[3][i],GA_trunc_res_fixed[4][i]]) for i in range(2001)]
+    ra_mean2 = [mean([GA_trunc_res_fixed[0][i], GA_trunc_res_fixed[1][i], GA_trunc_res_fixed[2][i],GA_trunc_res_fixed[3][i],GA_trunc_res_fixed[4][i]]) for i in error_xvals]
+    ra_sem = [np.std([GA_trunc_res_fixed[0][i], GA_trunc_res_fixed[1][i], GA_trunc_res_fixed[2][i],GA_trunc_res_fixed[3][i],GA_trunc_res_fixed[4][i]])/np.sqrt(5) for i in error_xvals]
+    plt.plot([i*50 for i in range(2001)], ra_mean1, "b")
+    plt.errorbar([i*50 for i in error_xvals],ra_mean2,yerr = ra_sem, fmt = 'o', ecolor = "black", elinewidth=2, capsize=2, markersize=5,markeredgecolor="black",markerfacecolor="black")
+    plt.xlabel('Number of Evaluations')
+    plt.ylabel('RMSE')
+    ###############
+    error_xvals = [i for i in range(0,100000,10000)]
+    ra_mean1 = [mean([ra_res_fixed[0][i], ra_res_fixed[1][i], ra_res_fixed[2][i],ra_res_fixed[3][i],ra_res_fixed[4][i]]) for i in range(100001)]
+    ra_mean2 = [mean([ra_res_fixed[0][i], ra_res_fixed[1][i], ra_res_fixed[2][i],ra_res_fixed[3][i],ra_res_fixed[4][i]]) for i in error_xvals]
+    ra_sem = [np.std([ra_res_fixed[0][i], ra_res_fixed[1][i], ra_res_fixed[2][i],ra_res_fixed[3][i],ra_res_fixed[4][i]])/np.sqrt(5) for i in error_xvals]
+    plt.plot([i for i in range(100001)], ra_mean1, "r")
+    plt.errorbar(error_xvals,ra_mean2,yerr = ra_sem, fmt = 'o', ecolor = "black", elinewidth=2, capsize=2, markersize=5,markeredgecolor="black",markerfacecolor="black")
+    plt.xlabel('Number of Evaluations')
+    plt.ylabel('RMSE')
+    plt.yscale("log")
+    plt.legend(["GP: deterministic crowding","RMHC","GP: truncation selection" ,"Random Search"])
+    plt.show()
+
+    
 
 
 
 if __name__ == "__main__":
     data = read_data()
+    # a = [None, cos, divide, None, 'x', 8.059196563187264]
+    # print(get_fitness(a,data))
+    # raise ValueError
+    #pop = [fgen(5) for i in range(30)]
+    #a = selection(pop, .2, data)
 
+    #print(hill_climber(100000,data))
     
     #[print(fgen(5), "\n") for i in range(10)]
-    # a = fgen(5)
+ 
     # print(a)
     # print(mutator_aggressive(a,1))
     # b = fgen(5)
@@ -668,17 +824,18 @@ if __name__ == "__main__":
 
     # a = [None, multiply, 3, add, None, None, 17, "x"]
     # b =  [None, multiply, "x", subtract, None, None, 17.0000, "x"]
-    #print(get_distance(a,b))
+    # c = [None, add, 3, sin, None, None, "x"]
+    # print(get_distance2(a,b))
+    # print(get_distance(b,c))
+    # print(get_distance(a,c))
     #print(mutator_aggressive(a,1))
     # # print(get_fitness(a, data))
-    #soln, fitnesses,divs = GP_trunc(400, 50, data, .8, 0.1) #THIS WORKS BUT NEED AT LEAST 2000 EVALS
-    # soln, fitnesses = GP_crowded(400, 40, data, .8, 0.1)
-    # soln = soln[0]
-    # print(soln)
-    # # print(fitnesses)
-    # plot_soln(soln, data)
-    # plt.plot([i for i in range(len(fitnesses))], fitnesses)
-    # plt.show()
+    soln,fitnesses= GP_crowded2(3000,30,data, 1,1) #THIS WORKS BUT NEED AT LEAST 2000 EVALS
+    print(soln)
+    print(fitnesses)
+    plot_soln(soln, data)
+    plt.plot([i for i in range(len(fitnesses))], fitnesses)
+    plt.show()
 
     # plt.plot([i for i in range(len(divs))], divs)
     # plt.show()
@@ -693,55 +850,63 @@ if __name__ == "__main__":
     #print(evaluator(a,10))
     #print(get_fitness(a,data))
 
-    random_res = []
-    print("STARTING RANDOM SEARCH...")
-    for i in range(5):
-        random_res.append(random_search(100000))
-    print("FINISHED RANDOM SEARCH")
-    pickle_path = open("random_res", "wb")
-    pickle.dump(random_res, pickle_path)    
-
-
-    print("STARTING RMHC...")
-    rmhc_res = []
-    for i in range(5):
-        rmhc_res.append(100000)
-    pickle_path = open("rmhc_res", "wb")
-    pickle.dump(rmhc_res, pickle_path)
-    print("FINISHED RMHC")
-
-
-    print("STARTING GP VIA TRUNCATION SELECTION")
-    GAtrunc_res = []
-    GAtrunc_funcs = []
-    GAtrunc_divs = []
-    for i in range(5):
-        res = GP_trunc(2000, 50, data, 1, 0.1)
-        GAtrunc_res.append(res[1])
-        GAtrunc_funcs.append(res[0][0])
-        GAtrunc_divs.append(res[2])
-        print("trial ", i," done.")
-    pickle_path = open("trunc_res", "wb")
-    pickle.dump(GAtrunc_res, pickle_path)
-    pickle_path = open("trunc_funcs", "wb")
-    pickle.dump(GAtrunc_funcs, pickle_path)
-    pickle_path = open("trunc_divs", "wb")
-    pickle.dump(GAtrunc_divs, pickle_path)
-    print("FINSHED GP VIA TRUCNATION SELECTION")
 
 
 
-    print("STARTING GP WITH DETERMINISTIC CROWDING...")
-    GAdet_res = []
-    GAdet_funcs = []
-    for i in range(5):
-        res = GP_crowded(2000, 50, data, 1, 0.1)
-        GAdet_res.append(res[1])
-        GAdet_funcs.append(res[0][0])
-        print("trial ", i," done.")
-    pickle_path = open("detcrow_res", "wb")
-    pickle.dump(GAdet_res, pickle_path)
-    pickle_path = open("detcrow_funcs", "wb")
-    pickle.dump(GAdet_funcs, pickle_path)
-    print("FINISHED GP WITH DETERMINISTIC CROWDING")
+
+
+
+
+###################################################
+    # random_res = []
+    # print("STARTING RANDOM SEARCH...")
+    # for i in range(5):
+    #     random_res.append(random_search(100000))
+    # print("FINISHED RANDOM SEARCH")
+    # pickle_path = open("random_res", "wb")
+    # pickle.dump(random_res, pickle_path)    
+
+
+    # print("STARTING RMHC...")
+    # rmhc_res = []
+    # for i in range(5):
+    #     rmhc_res.append(100000)
+    # pickle_path = open("rmhc_res", "wb")
+    # pickle.dump(rmhc_res, pickle_path)
+    # print("FINISHED RMHC")
+
+
+    # print("STARTING GP VIA TRUNCATION SELECTION")
+    # GAtrunc_res = []
+    # GAtrunc_funcs = []
+    # GAtrunc_divs = []
+    # for i in range(5):
+    #     res = GP_trunc(2000, 50, data, 1, 0.1)
+    #     GAtrunc_res.append(res[1])
+    #     GAtrunc_funcs.append(res[0][0])
+    #     GAtrunc_divs.append(res[2])
+    #     print("trial ", i," done.")
+    # pickle_path = open("trunc_res", "wb")
+    # pickle.dump(GAtrunc_res, pickle_path)
+    # pickle_path = open("trunc_funcs", "wb")
+    # pickle.dump(GAtrunc_funcs, pickle_path)
+    # pickle_path = open("trunc_divs", "wb")
+    # pickle.dump(GAtrunc_divs, pickle_path)
+    # print("FINSHED GP VIA TRUCNATION SELECTION")
+
+
+
+    # print("STARTING GP WITH DETERMINISTIC CROWDING...")
+    # GAdet_res = []
+    # GAdet_funcs = []
+    # for i in range(5):
+    #     res = GP_crowded(2000, 50, data, 1, 0.1)
+    #     GAdet_res.append(res[1])
+    #     GAdet_funcs.append(res[0][0])
+    #     print("trial ", i," done.")
+    # pickle_path = open("detcrow_res", "wb")
+    # pickle.dump(GAdet_res, pickle_path)
+    # pickle_path = open("detcrow_funcs", "wb")
+    # pickle.dump(GAdet_funcs, pickle_path)
+    # print("FINISHED GP WITH DETERMINISTIC CROWDING")
     
